@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Content creator · Impact Circles{% endblock %}
+{% block body %}
+<div class="intro">
+  <p class="eyebrow">Content creator</p>
+  <h1>Create content from your brief</h1>
+  <p class="steps">
+    <span class="current">1 Add brief</span>
+    <span>2 Review drafts</span>
+    <span>3 Approve</span>
+  </p>
+</div>
+
+{% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+<div class="two-col-layout">
+  <div class="main-col">
+    <section class="card">
+      <h2>Start with the facts</h2>
+      <p>Give the AI a project update or event brief. You can attach a PDF or image to add source material.</p>
+
+      <form method="post" action="/content/generate" enctype="multipart/form-data" class="stack" data-ai-wait="Creating your drafts. This may take up to 90 seconds.">
+        <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+
+        <label>
+          Project
+          <select name="project_id" id="project-select" required>
+            {% if not projects %}<option value="">Create a project below first</option>{% endif %}
+            {% for p in projects %}
+            <option value="{{ p.id }}" {% if p.id == selected_project_id %}selected{% endif %}>{{ p.name }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label>
+          Working title
+          <input name="title" maxlength="150" placeholder="e.g. Community AI Workshop Launch" required>
+        </label>
+
+        <label>
+          Source brief (what is new)
+          <textarea name="source" rows="7" maxlength="20000" placeholder="What happened? Who was involved? Which concrete facts and verified outcomes can we share?" required></textarea>
+        </label>
+
+        <label>
+          Optional PDF or image source
+          <input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp">
+        </label>
+
+        <button class="primary" {% if not projects %}disabled{% endif %}>Create 3 drafts</button>
+        <p class="hidden" role="status" aria-live="polite" data-ai-status></p>
+        <small>Outputs: LinkedIn post, newsletter update, and website draft. Review all claims before approval.</small>
+      </form>
+    </section>
+
+    <!-- Project Creation Form -->
+    <details class="card" style="margin-top: 1.5rem;">
+      <summary style="cursor: pointer; font-weight: 600; color: #1E3A8A;">+ Add a new project</summary>
+      <form method="post" action="/content/projects" class="stack" style="margin-top: 1rem;">
+        <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+        <label>
+          Project Name
+          <input name="name" maxlength="100" placeholder="e.g. Egypt SDG AI Incubator" required>
+        </label>
+        <label>
+          Project Description & Background
+          <textarea name="description" rows="3" maxlength="2000" placeholder="Summary of project goals, stakeholders, core themes for continuity." required></textarea>
+        </label>
+        <button type="submit" class="secondary" style="width: fit-content;">Save project</button>
+      </form>
+    </details>
+  </div>
+
+  {% if user.role == 'admin' %}<div class="side-col">
+    <!-- Compact Approved Project History -->
+    <section class="card history-panel">
+      <h2>Project Continuity</h2>
+      <p style="font-size: 0.85rem; color: #64748B;">Recent approved posts used to maintain consistent tone and naming across updates.</p>
+      {% if history %}
+      <div class="history-list">
+        {% for h in history %}
+        <div class="history-item">
+          <strong>{{ h.title }}</strong>
+          <small>{{ h.approved_at[:10] }}</small>
+          <p>{{ (h.drafts.linkedin or h.drafts.newsletter or '')[:140] }}...</p>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="font-size: 0.875rem; color: #94A3B8; font-style: italic;">No approved posts for this project yet. New briefs start fresh context.</p>
+      {% endif %}
+    </section>
+
+    <!-- Recent Drafts List -->
+    <section class="card history" style="margin-top: 1.5rem;">
+      <h2>Recent drafts</h2>
+      {% if rows %}
+      <div class="list">
+        {% for row in rows %}
+        <a href="/content/{{ row.id }}" class="draft-link">
+          <span>
+            <strong>{{ row.title }}</strong>
+            <small>{{ row.project_name or 'General' }} · {{ row.created_at[:10] }} · {{ row.display_name or row.email }} · {{ row.email }}</small>
+          </span>
+          <span class="badge {{ row.status|lower|replace(' ', '-') }}">{{ row.status }}</span>
+        </a>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p>No drafts created yet.</p>
+      {% endif %}
+    </section>
+  </div>{% endif %}
+</div>
+{% endblock %}

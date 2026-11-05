@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Financial documents · Impact Circles{% endblock %}
+{% block body %}
+<div class="intro"><p class="eyebrow">Financial documents</p><h1>Start an expense claim</h1><p class="steps"><span class="current">1 Upload</span><span>2 Check details</span><span>3 Confirm</span></p></div>
+<section class="card">
+  <h2>Upload a document</h2><p>Choose an invoice, receipt, flight ticket, or hotel or train booking. We will read it and show you the details to check.</p>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form action="/finance/upload" method="post" enctype="multipart/form-data" class="stack" data-ai-wait="Reading your document. This may take up to 90 seconds.">
+    <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+    <label>PDF or image <input type="file" name="file" accept="application/pdf,image/jpeg,image/png,image/webp" required></label>
+    <button class="primary">Upload and read details</button><p class="hidden" role="status" aria-live="polite" data-ai-status></p><small>Maximum 8 MB. Your original file is sent to the selected AI provider and kept securely with the claim for review.</small>
+  </form>
+</section>
+<section class="card">
+  <h2>My daily allowance</h2>
+  <p>The admin sets one daily rate in EUR. Days paid include all confirmed travel claims; the EUR allowance total excludes older claims calculated in other currencies, which remain in your history below. Booking costs are separate. There is no overall allowance balance or budget.</p>
+  <div class="allowance-grid">
+    {% for item in usage %}
+    <div class="allowance-item">
+      <strong>{{ item.currency }}</strong>
+      <span>Current rate: {% if item.current_rate %}{{ item.current_rate }} {{ item.currency }} per day{% else %}No current rate{% endif %}</span>
+      <span>Days paid: {{ item.days }}</span>
+      <span>Allowance claimed: {{ item.allowance }} {{ item.currency }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+<section class="history">
+  <h2>My claim history</h2>
+  {% if own_rows %}
+  <div class="list">
+    {% for row in own_rows %}
+    <a href="/finance/{{ row.id }}">
+      <span>
+        <strong>F-{{ row.id }} · {{ row.source_name }}</strong>
+        <small>{{ row.created_at[:10] }}{% if row.details.start_date and row.details.end_date %} · Travel {{ row.details.start_date }} to {{ row.details.end_date }}{% endif %}{% if row.calc %} · {{ row.calc.eligible_days|default(row.calc.travel_days) }} allowance days{% if row.calc.already_claimed_days|default(0) %} ({{ row.calc.already_claimed_days }} already paid){% endif %} · {{ row.calc.daily_allowance }} {{ row.calc.currency }} allowance · {{ row.calc.total }} {{ row.calc.currency }} total{% endif %}</small>
+      </span>
+      <span class="badge">{{ row.status }}</span>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}<p>No claims yet.</p>{% endif %}
+</section>
+{% if user.role == 'admin' %}
+{% if pending %}<section class="history"><h2>Needs admin review ({{ pending|length }})</h2><p>These documents may already have been recorded.</p><div class="list">{% for row in pending %}<a href="/finance/{{ row.id }}"><span><strong>{{ row.source_name }}</strong><small>{{ row.display_name or row.email }} · {{ row.email }}</small></span><span class="badge">Review</span></a>{% endfor %}</div></section>{% endif %}
+<section class="history"><h2>Recent documents</h2>
+  {% if rows %}<div class="list">{% for row in rows %}<a href="/finance/{{ row.id }}"><span><strong>{{ row.source_name }}</strong><small>{{ row.created_at[:10] }} · {{ row.display_name or row.email }} · {{ row.email }}</small></span><span class="badge">{{ row.status }}</span></a>{% endfor %}</div>
+  {% else %}<p>No documents yet.</p>{% endif %}
+</section>{% endif %}
+{% endblock %}

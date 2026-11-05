@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Review drafts · Impact Circles{% endblock %}
+{% block body %}
+<div class="intro">
+  <p class="eyebrow">Content creator · {{ project.name if project else 'General' }}</p>
+  <h1>{{ record.title }}</h1>
+  <p class="steps">
+    <span>1 Add brief</span>
+    <span class="current">2 Review drafts</span>
+    <span>3 Approve</span>
+  </p>
+  <span class="badge {{ record.status|lower|replace(' ', '-') }}">{{ record.status }}</span>
+</div>
+
+{% if record.sheet_error %}
+<div class="alert">
+  Approved here, but Google Sheets needs attention: {{ record.sheet_error }}
+  <form method="post" action="/content/{{ record.id }}/sync">
+    <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+    <button>Try Sheets again</button>
+  </form>
+</div>
+{% endif %}
+{% if record.sheet_synced_at %}
+<div class="success">Saved to Google Sheets.</div>
+{% endif %}
+{% if record.publication_error %}
+<div class="alert">Publication needs attention: {{ record.publication_error }}</div>
+{% endif %}
+
+<div class="two-col-layout">
+  <div class="main-col">
+    <section class="card">
+      <div style="display: flex; justify-content: space-between; align-items: baseline;">
+        <h2>Source brief (What was provided)</h2>
+        {% if record.source_name %}
+        <a href="/source/content/{{ record.id }}" target="_blank" rel="noopener" style="font-size: 0.875rem;">View {{ record.source_name }}</a>
+        {% endif %}
+      </div>
+      <p class="source-text">{{ record.source_text or 'Document provided as source attachment.' }}</p>
+    </section>
+
+    <form method="post" action="/content/{{ record.id }}/approve" class="stack" style="margin-top: 1.5rem;">
+      <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+
+      <!-- 3 Channels: LinkedIn, Newsletter, Website -->
+      {% for channel in ['linkedin', 'newsletter', 'website'] %}
+      <section class="card channel-card">
+        <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+          <h2 style="margin: 0;">{% if channel == 'linkedin' %}LinkedIn{% else %}{{ channel|title }}{% endif %} Draft</h2>
+          <button type="button" class="button secondary copy-btn" onclick="copyDraft('{{ channel }}', this)">
+            📋 Copy {% if channel == 'linkedin' %}LinkedIn{% else %}{{ channel|title }}{% endif %}
+          </button>
+        </div>
+        <label class="sr-only" for="{{ channel }}">{{ channel|title }} draft</label>
+        <textarea id="{{ channel }}" name="{{ channel }}" rows="8" {% if record.approved_at %}readonly{% endif %}>{{ drafts[channel] }}</textarea>
+      </section>
+      {% endfor %}
+
+      <div style="margin-top: 1rem;">
+        {% if not record.approved_at %}
+        <button class="primary" style="font-size: 1.05rem; padding: 0.75rem 1.5rem;">Approve these 3 drafts</button>
+        <small style="display: block; margin-top: 0.5rem; color: #64748B;">Approval saves the exact text shown above and syncs with the team Google Sheet.</small>
+        {% else %}
+        <div class="success">Approved on {{ record.approved_at[:10] }}. All three drafts are finalized and exportable.</div>
+        {% endif %}
+      </div>
+    </form>
+
+    {% if record.approved_at and user.role == 'admin' and not record.published_at %}
+    <form method="post" action="/content/{{ record.id }}/publish" style="margin-top: 1.5rem;">
+      <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+      <button class="secondary">Send approved drafts to publishing webhook</button>
+    </form>
+    {% endif %}
+
+    {% if record.published_at %}
+    <div class="success" style="margin-top: 1rem;">Sent to publishing webhook on {{ record.published_at[:10] }}.</div>
+    {% endif %}
+  </div>
+
+  <div class="side-col">
+    <!-- Project & Narrative Continuity Info -->
+    <section class="card history-panel">
+      <h2>Project Details</h2>
+      <p><strong>{{ project.name if project else 'General' }}</strong></p>
+      {% if project and project.description %}
+      <p style="font-size: 0.875rem; color: #475569;">{{ project.description }}</p>
+      {% endif %}
+
+      {% if user.role == 'admin' %}<h3 style="margin-top: 1.25rem; font-size: 0.95rem;">Past Approved Updates</h3>
+      {% if history %}
+      <div class="history-list">
+        {% for h in history %}
+        <div class="history-item">
+          <strong><a href="/content/{{ h.id }}">{{ h.title }}</a></strong>
+          <small>{{ h.approved_at[:10] }}</small>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p style="font-size: 0.85rem; color: #94A3B8; font-style: italic;">No other approved updates in this project yet.</p>
+      {% endif %}
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

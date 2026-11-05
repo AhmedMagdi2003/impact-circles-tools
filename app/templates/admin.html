@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Settings · Impact Circles{% endblock %}
+{% block body %}
+<div class="intro"><p class="eyebrow">Admin</p><h1>Team settings</h1><p>Changes to the daily allowance apply to new confirmations. Earlier confirmed claims keep their original calculation.</p></div>
+<section class="card"><h2>Finance and Google Sheets</h2>
+  <form method="post" action="/admin/settings" class="stack"><input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+    <label>Daily allowance per travel day (EUR only) <input name="per_diem_rates" type="number" min="0" max="10000000" step="0.01" required value="{{ settings.daily_allowance_eur }}"></label>
+    <label class="checkbox"><input type="checkbox" name="claim_include_booking_amount" {% if settings.claim_include_booking_amount == 'true' %}checked{% endif %}> Include the ticket or booking amount in the claim</label>
+    <label>Categories, separated by commas <input name="categories" required value="{{ settings.categories }}"></label>
+    <p>Google Sheets is connected by your administrator using the Apps Script setup in the admin guide.</p>
+    <button class="primary">Save settings</button>
+  </form>
+</section>
+<section class="card"><h2>Add a team member</h2><form method="post" action="/admin/users" class="stack"><input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+  <div class="field-grid"><label>Name <input name="display_name" maxlength="100" required></label><label>Email <input name="email" type="email" required></label><label>Temporary password <input name="password" type="password" minlength="12" required></label></div>
+  <label>Role <select name="role"><option value="member">Team member</option><option value="admin">Admin</option></select></label><button>Add user</button>
+</form></section>
+<section class="history"><h2>Users</h2><div class="list">{% for account in users %}<div class="user-row"><span><strong>{{ account.display_name or account.email }}</strong><small>{{ account.email }} · {{ account.role|title }} · {{ 'Active' if account.active else 'Disabled' }}</small></span><form method="post" action="/admin/users/{{ account.id }}/name"><input type="hidden" name="csrf" value="{{ user.csrf_token }}"><label>Name <input name="display_name" value="{{ account.display_name }}" maxlength="100" required></label><button>Update name</button></form>{% if account.id != user.id %}<form method="post" action="/admin/users/{{ account.id }}/toggle"><input type="hidden" name="csrf" value="{{ user.csrf_token }}"><button>{{ 'Disable' if account.active else 'Enable' }}</button></form>{% endif %}</div>{% endfor %}</div></section>
+<section class="history"><h2>Project owners</h2><p>Each member can use only their own projects. Admins can use all projects.</p><div class="list">{% for project in projects %}<div class="user-row"><strong>{{ project.name }}</strong><form method="post" action="/admin/projects/{{ project.id }}/owner"><input type="hidden" name="csrf" value="{{ user.csrf_token }}"><label>Owner <select name="owner_id">{% for account in users if account.active %}<option value="{{ account.id }}" {% if project.created_by == account.id %}selected{% endif %}>{{ account.display_name or account.email }} · {{ account.email }}</option>{% endfor %}</select></label><button>Assign owner</button></form></div>{% endfor %}</div></section>
+{% endblock %}

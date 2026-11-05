@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}Check claim · Impact Circles{% endblock %}
+{% block body %}
+<div class="intro">
+  <p class="eyebrow">Financial documents</p>
+  <h1>Check the extracted details</h1>
+  <p class="steps">
+    <span>1 Upload</span>
+    <span class="current">2 Check details</span>
+    <span>3 Confirm</span>
+  </p>
+  <p>
+    <a href="/source/finance/{{ record.id }}" target="_blank" rel="noopener">View {{ record.source_name }}</a> ·
+    <span class="badge {{ record.status|lower|replace(' ', '-') }}">{{ record.status }}</span>
+  </p>
+</div>
+
+{% if duplicate %}
+<div class="alert">
+  {% if user.role == 'admin' %}This document matches confirmed claim F-{{ duplicate.id }} by file or invoice details. <a href="/finance/{{ duplicate.id }}">Review the existing claim</a> before deciding.
+  {% else %}This may already have been recorded. An administrator needs to review it before it can be saved.{% endif %}
+</div>
+{% endif %}
+
+{% if record.sheet_error %}
+<div class="alert">
+  Saved here, but Google Sheets needs attention: {{ record.sheet_error }}
+  <form method="post" action="/finance/{{ record.id }}/sync">
+    <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+    <button>Try Sheets again</button>
+  </form>
+</div>
+{% endif %}
+
+{% if record.sheet_synced_at %}
+<div class="success">Saved to Google Sheets.</div>
+{% endif %}
+
+{% if error %}
+<div class="alert">{{ error }}</div>
+{% endif %}
+
+<form method="post" action="/finance/{{ record.id }}/confirm" id="claim-form">
+  <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+  <input type="hidden" name="rule_token" value="{{ rule_token }}">
+
+  <section class="card">
+    <h2>Your details</h2>
+    <p>Complete or correct these details. The traveller may be suggested from the document.</p>
+    <div class="field-grid">
+      <label>Traveller <input name="traveller" value="{{ details.traveller }}" {% if record.confirmed_at %}readonly{% endif %}></label>
+      <label>Category <select name="category" {% if record.confirmed_at %}disabled{% endif %}>{% for category in categories %}<option {% if details.category == category %}selected{% endif %}>{{ category }}</option>{% endfor %}</select></label>
+    </div>
+    <label>Notes <textarea name="description" rows="2" {% if record.confirmed_at %}readonly{% endif %}>{{ details.description }}</textarea></label>
+  </section>
+
+  <section class="card">
+    <h2>Details read from the document</h2>
+    <p>Check these AI suggestions against the original and correct any mistakes.</p>
+    <div class="field-grid">
+      <label>
+        Type
+        <select name="document_type" {% if record.confirmed_at %}disabled{% endif %}>
+          {% for type in ['invoice', 'receipt', 'flight', 'hotel', 'train', 'other'] %}
+          <option value="{{ type }}" {% if details.document_type == type %}selected{% endif %}>{{ type|title }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>Invoice number <input name="invoice_number" value="{{ details.invoice_number or '' }}" {% if record.confirmed_at %}readonly{% endif %}></label>
+      <label>Invoice date <input name="invoice_date" type="date" value="{{ details.invoice_date or '' }}" {% if record.confirmed_at %}readonly{% endif %}></label>
+
+      <label>
+        First travel date
+        <input name="start_date" type="date" value="{{ details.start_date }}" {% if record.confirmed_at %}readonly{% endif %}>
+      </label>
+
+      <label>
+        Last travel date
+        <input name="end_date" type="date" value="{{ details.end_date }}" {% if record.confirmed_at %}readonly{% endif %}>
+      </label>
+
+      <label>
+        Origin
+        <input name="origin" value="{{ details.origin }}" {% if record.confirmed_at %}readonly{% endif %}>
+      </label>
+
+      <label>
+        Destination
+        <input name="destination" value="{{ details.destination }}" {% if record.confirmed_at %}readonly{% endif %}>
+      </label>
+
+      <label>
+        Vendor
+        <input name="vendor" value="{{ details.vendor }}" {% if record.confirmed_at %}readonly{% endif %}>
+      </label>
+
+      <label>
+        Document amount
+        <input name="amount" type="number" step="0.01" min="0" value="{{ details.amount }}" required {% if record.confirmed_at %}readonly{% endif %}>
+      </label>
+
+      <label>
+        Currency
+        <input name="currency" maxlength="3" value="{{ details.currency }}" required {% if record.confirmed_at %}readonly{% endif %}>
+      </label>
+
+    </div>
+  </section>
+
+  <section class="card claim-box" data-rates='{{ rule.rates|tojson }}' data-fx='{{ rule.fx|tojson }}' data-include="{{ rule.include }}" data-claimed-dates='{{ rule.claimed_dates|tojson }}' style="margin-top: 1.5rem;">
+    <h2>How your claim is calculated</h2>
+    <p>Travel days include departure and return dates. A day already paid on one of your confirmed travel claims does not receive a second daily allowance.</p>
+    {% if rule.fx %}<p>Foreign receipt conversion uses the rate dated {{ rule.fx.date }}. <a href="https://www.exchangerate-api.com">Rates By Exchange Rate API</a>.</p>{% endif %}
+
+    {% if calc and calc.hotel_warning %}
+    <div class="alert" style="background: #fffbeb; border-color: #f59e0b; color: #92400e;">
+      ⚠️ {{ calc.hotel_warning }}
+    </div>
+    {% endif %}
+
+    {% if calculation_error %}
+    <div class="alert" id="claim-error">{{ calculation_error }}</div>
+    {% else %}
+    <div class="alert hidden" id="claim-error"></div>
+    {% endif %}
+
+    <dl class="calculation">
+      <div>
+        <dt>Document receipt included</dt>
+        <dd id="booking-value">
+          {% if calc %}
+            {{ calc.booking_claim }} {{ calc.currency }}
+            {% if calc.booking_currency and calc.booking_currency != 'EUR' %}
+              <small style="display:block; color:#64748B;">{{ calc.booking_amount }} {{ calc.booking_currency }} × {{ calc.booking_fx_rate }} EUR per {{ calc.booking_currency }} · {{ calc.booking_fx_date }} · <a href="https://www.exchangerate-api.com">Rates By Exchange Rate API</a></small>
+            {% endif %}
+          {% else %}
+            —
+          {% endif %}
+        </dd>
+      </div>
+
+      <div>
+        <dt>Daily allowance (Per Diem)</dt>
+        <dd id="allowance-value">
+          {% if calc %}
+            {% set payable_days = calc.eligible_days|default(calc.travel_days) %}
+            {{ payable_days }} payable {{ 'day' if payable_days == 1 else 'days' }} × {{ calc.daily_rate }} {{ calc.currency }} = {{ calc.daily_allowance }} {{ calc.currency }}
+            {% if calc.already_claimed_days|default(0) %}<small style="display:block;">{{ calc.already_claimed_days }} of {{ calc.travel_days }} travel days already claimed</small>{% endif %}
+          {% else %}
+            —
+          {% endif %}
+        </dd>
+      </div>
+
+      <div class="total">
+        <dt>Total claim</dt>
+        <dd id="total-value">
+          {% if calc %}
+            {{ calc.total }} {{ calc.currency }}
+            {% if calc.total_eur and calc.currency != 'EUR' %}
+              <span style="display:block; font-size: 1rem; color: #16A34A;">Total: {{ calc.total_eur }} EUR</span>
+            {% endif %}
+          {% else %}
+            —
+          {% endif %}
+        </dd>
+      </div>
+    </dl>
+
+    {% if calc and calc.expense_lines %}
+    <details style="margin: 1rem 0; font-size: 0.9rem; color: #475569;">
+      <summary style="cursor: pointer; font-weight: 600;">View itemized line conversion details</summary>
+      <div style="margin-top: 0.75rem; overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+          <thead>
+            <tr style="border-bottom: 2px solid #E2E8F0; text-align: left;">
+              <th style="padding: 6px;">Line</th>
+              <th style="padding: 6px;">Original</th>
+              <th style="padding: 6px;">Rate</th>
+              <th style="padding: 6px;">Rate Provider</th>
+              <th style="padding: 6px;">EUR Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for line in calc.expense_lines %}
+            <tr style="border-bottom: 1px solid #E2E8F0;">
+              <td style="padding: 6px;">{{ line.description }}</td>
+              <td style="padding: 6px;">{{ line.original_amount }} {{ line.original_currency }}</td>
+              <td style="padding: 6px;">{{ line.fx_display }}</td>
+              <td style="padding: 6px;">{{ line.fx_provider }}</td>
+              <td style="padding: 6px;"><strong>{{ line.eur_amount }} EUR</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
+    {% endif %}
+
+    {% if not record.confirmed_at and duplicate and user.role == 'admin' %}
+    <label>Reason for accepting this duplicate <textarea name="duplicate_override_reason" required maxlength="500" rows="2"></textarea></label>
+    <button class="primary" id="confirm-button" name="override_duplicate" value="yes" style="margin-top: 1rem;">Confirm despite possible duplicate</button>
+    {% elif not record.confirmed_at and duplicate %}
+    <button class="primary" id="confirm-button" style="margin-top: 1rem;">Send details to admin</button>
+    {% elif not record.confirmed_at %}
+    <button class="primary" id="confirm-button" style="margin-top: 1rem;">Confirm and save claim</button>
+    {% else %}
+    <p class="success-text" style="color: #16A34A; font-weight: 600; margin-top: 1rem;">
+      ✓ Confirmed on {{ record.confirmed_at[:10] }} (Claim ID: F-{{ record.id }})
+    </p>
+    {% endif %}
+  </section>
+</form>
+{% if not record.confirmed_at %}
+<section class="card">
+  <h2>Delete this draft</h2>
+  <p>This removes this unconfirmed claim and its uploaded document.</p>
+  <form method="post" action="/finance/{{ record.id }}/delete" onsubmit="return confirm('Delete draft F-{{ record.id }} and its uploaded file?');">
+    <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+    <button name="confirm_delete" value="yes">Delete draft</button>
+  </form>
+</section>
+{% endif %}
+{% endblock %}

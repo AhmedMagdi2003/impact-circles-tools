@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Sign in · Impact Circles{% endblock %}
+{% block body %}
+<section class="card narrow">
+  <p class="eyebrow">Team access</p>
+  <h1>Welcome back</h1>
+  <p>Sign in to work with financial documents and content drafts.</p>
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+  <form method="post" action="/login" class="stack">
+    <label>Email <input name="email" type="email" autocomplete="username" required></label>
+    <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+    <button class="primary">Sign in</button>
+  </form>
+</section>
+{% endblock %}

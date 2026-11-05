@@ -1,0 +1,23 @@
+.env
+.venv/
+__pycache__/
+.pytest_cache/
+data/
+*.db
+*.db-shm
+*.db-wal
+service-account*.json
+.pytest_tmp/
+.pytest_*/
+.edge-profile/
+.edge-profile-*/
+.chrome-profile/
+docs/screenshots/*.html
+# Keep working notes local; publish only the six approved Markdown guides.
+/docs/**/*.md
+!/docs/ADMIN_GUIDE.md
+!/docs/USER_GUIDE.md
+!/docs/TECHNICAL.md
+!/docs/SMART_CLAIMS_CALCULATION.md
+!/docs/LOCAL_SETUP_FROM_SCRATCH.md
+!/docs/PAID_HOSTING.md

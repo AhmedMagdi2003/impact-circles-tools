@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Claim confirmed · Impact Circles{% endblock %}
+{% block body %}
+<div class="intro">
+  <p class="eyebrow">Financial documents</p>
+  <h1>Claim confirmed</h1>
+  <p class="steps"><span>1 Upload</span><span>2 Check details</span><span class="current">3 Confirm</span></p>
+</div>
+
+<section class="card narrow">
+  <div class="success" role="status">
+    <strong>Claim F-{{ record.id }} has been confirmed.</strong>
+    <div>Your claim has been saved.</div>
+  </div>
+  <p><strong>{{ record.source_name }}</strong></p>
+  {% set payable_days = calc.eligible_days|default(calc.travel_days) %}
+  <dl class="calculation">
+    <div><dt>Booking or receipt</dt><dd>{{ calc.booking_claim|default(calc.booking_eur|default(calc.booking_amount)) }} {{ calc.currency }}{% if calc.booking_currency and calc.booking_currency != 'EUR' %}<small style="display:block;">{{ calc.booking_amount }} {{ calc.booking_currency }} × {{ calc.booking_fx_rate }} EUR · rate dated {{ calc.booking_fx_date }} · <a href="https://www.exchangerate-api.com">Rates By Exchange Rate API</a></small>{% endif %}</dd></div>
+    <div><dt>Daily allowance</dt><dd>{{ payable_days }} {{ 'day' if payable_days == 1 else 'days' }} × {{ calc.daily_rate }} {{ calc.currency }} = {{ calc.daily_allowance }} {{ calc.currency }}</dd></div>
+    {% if calc.already_claimed_days|default(0) %}<div><dt>Travel days already paid</dt><dd>{{ calc.already_claimed_days }}</dd></div>{% endif %}
+    <div class="total"><dt>Total claim</dt><dd>{{ calc.total }} {{ calc.currency }}</dd></div>
+  </dl>
+  {% if calc.currency != 'EUR' and calc.total_eur %}<p>Recorded EUR total: <strong>{{ calc.total_eur }} EUR</strong></p>{% endif %}
+
+  {% if record.sheet_error %}
+  <div class="alert">Your claim is saved, but Google Sheets needs attention: {{ record.sheet_error }}</div>
+  <form method="post" action="/finance/{{ record.id }}/sync">
+    <input type="hidden" name="csrf" value="{{ user.csrf_token }}">
+    <button type="submit">Try Google Sheets again</button>
+  </form>
+  {% elif record.sheet_synced_at %}
+  <p>Also saved to Google Sheets.</p>
+  {% endif %}
+
+  <div class="confirmation-actions">
+    <a class="button-link" href="/finance">Upload another document</a>
+    <a href="/finance/{{ record.id }}">View claim details</a>
+  </div>
+</section>
+{% endblock %}

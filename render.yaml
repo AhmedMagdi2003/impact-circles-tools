@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: impact-circles-tools
+    runtime: docker
+    plan: starter
+    healthCheckPath: /health
+    disk:
+      name: impact-tools-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_PATH
+        value: /data/impact_tools.db
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
+      - key: BOOTSTRAP_ADMIN_PASSWORD
+        sync: false
+      - key: FINANCE_PROVIDER
+        value: gemini
+      - key: FINANCE_MODEL
+        sync: false
+      - key: CONTENT_PROVIDER
+        value: gemini
+      - key: CONTENT_MODEL
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SHEETS_WEBHOOK_URL
+        sync: false
+      - key: SHEETS_WEBHOOK_SECRET
+        sync: false
+      - key: PUBLISH_WEBHOOK_URL
+        sync: false
+      - key: PUBLISH_WEBHOOK_TOKEN
+        sync: false

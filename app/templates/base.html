@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{% block title %}Impact Circles Tools{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css?v=20261105-eur-claims">
+  <script defer src="/static/app.js?v=20261105-eur-claims"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="Impact Circles team tools"><img src="/static/images/impactcircles_logo.png" alt="Impact Circles" width="158" height="83"><span class="brand-caption">Team tools</span></a>
+    {% if user %}
+    <nav aria-label="Main navigation">
+      <a href="/finance">Financial documents</a>
+      <a href="/content">Content creator</a>
+      {% if user.role == 'admin' %}<a href="/admin">Settings</a>{% endif %}
+      <a href="/account">My account</a>
+    </nav>
+    <form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ user.csrf_token }}"><button class="text-button">Sign out</button></form>
+    {% endif %}
+  </header>
+  <main class="container">{% block body %}{% endblock %}</main>
+  <footer>Impact Circles · Internal team tools · <a href="https://www.exchangerate-api.com">Rates By Exchange Rate API</a></footer>
+</body>
+</html>
