@@ -5,9 +5,9 @@ One small, unified web application for financial document workflows and project-
 - **Finance:** upload document → enter your personal details and check extracted document details → confirm claim. Possible duplicates are flagged and sent to an admin for review.
 - **Content:** choose your assigned project, add a brief or source file → review and edit three tailored drafts (LinkedIn, newsletter, website) → approve. An admin can optionally forward approved drafts to a publishing webhook.
 
-Admins see shared history, review suspected duplicates, and assign project owners. Members see their own claim history, daily allowance rates and usage, and assigned projects. A travel day already paid on a member's confirmed claim does not earn a second daily allowance on another booking. Confirmed finance claims and approved content drafts are stored in SQLite and exported to Google Sheets through an Apps Script webhook, including snapshot attribution of who created and who confirmed/approved each record.
+Admins see shared history, review suspected duplicates, and assign project owners. Members see their own claim history, daily allowance rates and usage, and assigned projects. A travel day already paid on a member's confirmed claim does not earn a second daily allowance on another booking. Records are stored in SQLite for local or disk-backed hosting, or PostgreSQL when `DATABASE_URL` is set for the Render Free trial. Confirmed finance claims and approved content drafts are exported to Google Sheets through an Apps Script webhook, including snapshot attribution of who created and who confirmed/approved each record.
 
-The AI model only reads documents and drafts text; it never performs financial calculations. PDFs and images are sent directly as raw bytes to the selected multimodal model (Gemini, OpenAI, or Anthropic); there is no heavy local OCR or PDF rendering engine. Original files are preserved on server disk for verification. SQLite stores the claim details, calculation, filename, file type, and hash; it does not store the original PDF or image bytes. A member can open their own uploaded original from the claim review page, and an admin can open any claim's original. Other members cannot open it through the app. Access to the separate Google Sheet depends on Google Drive sharing settings.
+The AI model only reads documents and drafts text; it never performs financial calculations. PDFs and images are sent directly as raw bytes to the selected multimodal model (Gemini, OpenAI, or Anthropic); there is no heavy local OCR or PDF rendering engine. Newly uploaded originals are stored with their records in the selected database. Older local installations can still read originals retained in their `uploads/` folder. A member can open their own uploaded original from the claim review page, and an admin can open any claim's original. Other members cannot open it through the app. Access to the separate Google Sheet depends on Google Drive sharing settings.
 
 **Current Stage & Production Blockers:**
 - **Google Sheets Webhook:** The Google Apps Script webhook was verified on 2026-11-02 for 26-column Finance and 13-column Content formats. On 2026-11-05, a synthetic flight claim was confirmed in the local app and verified in the connected Finance Sheet as F-119 with a 206.50 EUR total. The visible Sheet sharing state was **Private to only me**. An organization-owned, appropriately shared Sheet and hosted acceptance test remain necessary before team rollout.
@@ -36,8 +36,9 @@ app/
   core/
     config.py            # Environment configuration and validation
     auth.py              # PBKDF2 password hashing, HMAC sessions, CSRF, and file uploads
-    db.py                # SQLite connection pool, query helpers, and settings
-    migrations.py        # Versioned SQLite migrations (V1 through V7)
+    db.py                # SQLite/PostgreSQL connection adapter, source files, and settings
+    migrations.py        # Versioned SQLite migrations (V1 through V8)
+    postgres_migrations.py # Fresh PostgreSQL trial schema
     routes.py            # Core paths: /, /login, /logout, /health, /account
     admin_routes.py      # Admin paths: /admin, /admin/settings, /admin/users, /admin/projects
   finance/
@@ -56,7 +57,7 @@ app/
   static/                # CSS stylesheet, browser JavaScript, and organization logo
 docs/                    # Six public guides; other local Markdown notes are excluded from Git
 scripts/
-  backup.py              # Hot SQLite backup and uploads zip archiver
+  backup.py              # Hot SQLite backup and legacy uploads zip archiver
   demo_setup.py          # Synthetic dataset seeder for local testing
   memory_probe.py        # Local memory usage probe
   google_apps_script/    # Local webhook source; public copy is in the Admin Guide
@@ -144,4 +145,4 @@ uv run python -m scripts.memory_probe
 ```
 
 > [!IMPORTANT]
-> **Single Worker Constraint:** The service is strictly architected for **one process and one worker (`--workers 1`)** because SQLite is the operational datastore and does not support multi-process concurrent write concurrency safely.
+> **Single Worker Constraint:** The Docker service uses **one process and one worker (`--workers 1`)**. This is necessary for the SQLite deployment path and keeps the trial within free compute limits.

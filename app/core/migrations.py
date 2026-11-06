@@ -230,6 +230,20 @@ def apply_migration_7(db: sqlite3.Connection) -> None:
     db.execute("UPDATE settings SET value=? WHERE key='per_diem_rates'", (f"EUR,{eur_rate}",))
 
 
+def apply_migration_8(db: sqlite3.Connection) -> None:
+    """Keep newly uploaded originals in the same durable store as their records."""
+    db.executescript("""
+        CREATE TABLE IF NOT EXISTS finance_sources (
+            record_id INTEGER PRIMARY KEY REFERENCES finance_records(id) ON DELETE CASCADE,
+            data BLOB NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS content_sources (
+            record_id INTEGER PRIMARY KEY REFERENCES content_records(id) ON DELETE CASCADE,
+            data BLOB NOT NULL
+        );
+    """)
+
+
 MIGRATIONS = [
     (1, "Base schema with auth, finance, content and settings", apply_migration_1),
     (2, "Projects entity and content project lineage", apply_migration_2),
@@ -238,6 +252,7 @@ MIGRATIONS = [
     (5, "Project ownership", apply_migration_5),
     (6, "Record attribution snapshots", apply_migration_6),
     (7, "EUR-only daily allowance", apply_migration_7),
+    (8, "Original uploads stored with records", apply_migration_8),
 ]
 
 

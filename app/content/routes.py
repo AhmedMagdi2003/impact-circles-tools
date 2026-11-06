@@ -1,11 +1,10 @@
 """Content routes: project management, prompt generation with history, draft review, and approval."""
 
 import json
-from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 import app.web
 from app.content.prompts import build_content_prompt
@@ -18,7 +17,7 @@ from app.core.auth import (
     validate_attachment,
     verify_form_csrf,
 )
-from app.core.db import database, get_project, get_projects, utc_now
+from app.core.db import database, get_project, get_projects, get_source, store_source, utc_now
 
 router = APIRouter()
 
@@ -114,6 +113,9 @@ def source_content(request: Request, record_id: int):
     user = require_user(request, config)
     with database(config.database_path) as db:
         row = require_record_access(db, "content_records", record_id, user)
+        data = get_source(db, "content", record_id)
+    if data is not None:
+        return Response(data, media_type=row["source_mime"], headers={"Content-Disposition": "inline"})
     path = config.database_path.parent / "uploads" / f"content-{record_id}"
     if not row or not row["source_name"] or not path.is_file():
         raise HTTPException(404, "Source file not found")
@@ -178,10 +180,11 @@ async def content_generate(
             raise ValueError("AI returned incomplete drafts. Please try again")
 
         with database(config.database_path) as db:
-            db.execute("""
+            record_id = db.execute("""
                 INSERT INTO content_records
                 (created_at, created_by, project_id, title, source_text, source_name, source_mime, drafts_json, status, creator_name, creator_email)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
             """, (
                 utc_now(),
                 user["id"],
@@ -194,12 +197,9 @@ async def content_generate(
                 "Needs your attention",
                 user["display_name"] or user["email"].split("@", 1)[0],
                 user["email"],
-            ))
-            record_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
+            )).fetchone()[0]
             if attachment:
-                folder = config.database_path.parent / "uploads"
-                folder.mkdir(parents=True, exist_ok=True)
-                (folder / f"content-{record_id}").write_bytes(attachment.data)
+                store_source(db, "content", record_id, attachment.data)
 
         return redirect(f"/content/{record_id}")
     except ValueError as exc:

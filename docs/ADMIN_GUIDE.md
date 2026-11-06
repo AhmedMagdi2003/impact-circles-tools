@@ -46,7 +46,7 @@ When a user uploads or confirms a financial document, the application inspects a
 - If a duplicate is detected, the claim status changes to **Needs admin review** and the earlier record's ID is stored in `duplicate_of`.
 - **Enforcement:** Non-admin members cannot confirm a flagged claim, even if they edit invoice fields.
 - **Admin Override:** In `/finance`, admins see a dedicated **Needs admin review (N)** queue. An admin can inspect the earlier claim side-by-side. If the document is a legitimate separate expense (e.g. two legitimate recurring monthly invoices with identical vendor names or different travel legs), the admin can check **Override duplicate flag**, enter a mandatory **Reason for approving exception** (minimum 5 characters), and confirm the claim.
-- **Concurrency Safety:** Confirmation performs `BEGIN IMMEDIATE` on SQLite, serializing simultaneous submissions and preventing race conditions where two users upload duplicate documents simultaneously.
+- **Concurrency Safety:** Confirmation locks finance writes (`BEGIN IMMEDIATE` on SQLite or a finance-table lock on PostgreSQL), serializing simultaneous confirmations and preventing duplicate-claim races.
 - **Detection Heuristics & Limits:** This heuristic catches identical files and common invoice re-submissions, but cannot detect completely different invoice numbers, misspelled vendor names, or unregistered cash receipts. Admins must maintain periodic human reconciliation.
 
 ---
@@ -206,7 +206,7 @@ Google enforces [Apps Script quotas](https://developers.google.com/apps-script/g
 
 ### Resolving Sync Errors
 If an export fails (network timeout, temporary Google outage, or invalid credentials):
-1. The record is safely stored in SQLite with `sheet_error` populated.
+1. The record remains in the operational database (SQLite locally or PostgreSQL in the free hosted trial) with `sheet_error` populated.
 2. The review page displays an alert with a **Try Sheets again** button.
 3. If Google returns HTTP 401 or 403, check that the Web App deployment is set to *Anyone* and that Google Workspace policy permits external web apps.
 4. If the error mentions *Invalid row*, verify that the spreadsheet tabs have exactly 26 columns in Finance and 13 columns in Content.
@@ -216,9 +216,7 @@ If an export fails (network timeout, temporary Google outage, or invalid credent
 
 ## 5. Backups & Restore Runbook
 
-The application stores all critical state in two locations:
-1. SQLite database file (`impact_tools.db`).
-2. Retained source files directory (`uploads/`).
+On local or disk-backed SQLite installations, new records and original documents live in the SQLite database file (`impact_tools.db`). The adjacent `uploads/` directory may contain originals from older versions. Keep both when backing up an existing installation. On the PostgreSQL trial, records and originals live in PostgreSQL; the SQLite backup script below does not back up that database. Export PostgreSQL data before ending or replacing the trial.
 
 ### Creating a Hot Backup
 Run the backup script (can be run while the app is active):
@@ -229,7 +227,7 @@ uv run python -m scripts.backup --output /backups/impact_tools_$(date +%Y%m%d).z
 # Or directly:
 python -m scripts.backup --output /backups/impact_tools_$(date +%Y%m%d).zip
 ```
-The backup script uses the official SQLite online backup API (`source.backup(target)`) to produce a transactionally consistent copy, and bundles all retained source PDFs and images into the compressed archive.
+The backup script uses the official SQLite online backup API (`source.backup(target)`) to produce a transactionally consistent copy. New originals are inside that database; it also bundles any legacy PDFs and images still in `uploads/`.
 
 ### Testing Restore (Disaster Recovery Runbook)
 1. Stop the application server:

@@ -4,10 +4,9 @@ import hashlib
 import json
 from datetime import date, timedelta
 from decimal import Decimal
-from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 import app.web
 from app.core.auth import (
@@ -18,7 +17,7 @@ from app.core.auth import (
     validate_attachment,
     verify_form_csrf,
 )
-from app.core.db import database, get_destination_rates, setting, utc_now
+from app.core.db import database, get_destination_rates, get_source, setting, store_source, utc_now
 from app.finance.prompts import FINANCE_PROMPT
 from app.finance.duplicates import find_duplicate
 from app.finance.rules import calculate_claim, calculate_policy_claim, money
@@ -201,6 +200,9 @@ def source_finance(request: Request, record_id: int):
     user = require_user(request, config)
     with database(config.database_path) as db:
         row = require_record_access(db, "finance_records", record_id, user)
+        data = get_source(db, "finance", record_id)
+    if data is not None:
+        return Response(data, media_type=row["source_mime"], headers={"Content-Disposition": "inline"})
     path = config.database_path.parent / "uploads" / f"finance-{record_id}"
     if not row or not row["source_name"] or not path.is_file():
         raise HTTPException(404, "Source file not found")
@@ -229,20 +231,18 @@ async def finance_upload(request: Request, file: UploadFile = File(...), csrf: s
             preferred = "Travel" if details["document_type"] in {"flight", "hotel", "train"} else "Other"
             details["category"] = preferred if preferred in categories else (categories[0] if categories else "")
             duplicate_id = find_duplicate(db, digest, details)
-            db.execute("""
+            record_id = db.execute("""
                 INSERT INTO finance_records
                 (created_at, created_by, source_name, source_mime, source_hash, status, details_json, source_currency, destination, duplicate_of, creator_name, creator_email)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING id
             """, (
                 utc_now(), user["id"], attachment.name, attachment.mime, digest,
                 "Needs admin review" if duplicate_id else "Needs your attention", json.dumps(details),
                 details.get("currency", "EUR"), details.get("destination", ""), duplicate_id,
                 user["display_name"] or user["email"].split("@", 1)[0], user["email"]
-            ))
-            record_id = db.execute("SELECT last_insert_rowid()").fetchone()[0]
-            folder = config.database_path.parent / "uploads"
-            folder.mkdir(parents=True, exist_ok=True)
-            (folder / f"finance-{record_id}").write_bytes(attachment.data)
+            )).fetchone()[0]
+            store_source(db, "finance", record_id, attachment.data)
         return redirect(f"/finance/{record_id}")
     except ValueError as exc:
         with database(config.database_path) as db:

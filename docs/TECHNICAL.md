@@ -34,9 +34,9 @@ The application is implemented as a single, unified FastAPI service (`app.web:ap
             ┌──────────────────┘       │       └──────────────────┐
             ▼                          ▼                          ▼
    ┌─────────────────┐       ┌─────────────────┐       ┌─────────────────────┐
-   │ Persistent Disk │       │  Multimodal AI  │       │ Google Apps Script  │
-   │  - SQLite DB    │       │  (Gemini/OAI/   │       │   (/exec Webhook)   │
-   │  - uploads/     │       │   Anthropic)    │       │          │          │
+   │ SQLite disk or  │       │  Multimodal AI  │       │ Google Apps Script  │
+   │ remote Postgres │       │  (Gemini/OAI/   │       │   (/exec Webhook)   │
+   │ DB + originals │       │   Anthropic)    │       │          │          │
    └─────────────────┘       └─────────────────┘       │          ▼          │
                                                        │ Google Sheets Tab   │
                                                        │ (Finance / Content) │
@@ -44,16 +44,18 @@ The application is implemented as a single, unified FastAPI service (`app.web:ap
 ```
 
 ### Key Architectural Invariants
-- **Single Process & Single Worker (`--workers 1`):** SQLite is the authoritative operational datastore. Concurrency is serialized on write transactions using `BEGIN IMMEDIATE` to prevent SQLite busy/lock conflicts. Scaling out horizontally is not supported without migrating to a client-server datastore such as PostgreSQL.
+- **Single Process & Single Worker (`--workers 1`):** The Docker service uses one worker. Local and paid-disk installs use SQLite; setting `DATABASE_URL` selects PostgreSQL for a diskless trial. The final duplicate check locks finance records before confirming a claim.
 - **Multimodal AI as Feature Extractor Only:** Models extract candidate facts only; they never compute monetary amounts, exchange rates, or per diem days. All calculations are executed server-side using `decimal.Decimal`.
 - **Zero Local OCR Overhead:** The application transmits original PDF or image binary bytes directly to the external multimodal model (base64). No local OCR engines (Tesseract) or PDF renderers (Poppler, pdf2image) are installed.
 - **Permanent Ledger Attribution:** When a record is created and subsequently confirmed or approved, the user's `display_name` and `email` are permanently snapshotted into `creator_name`, `creator_email`, `actor_name`, and `actor_email`. Subsequent edits to user accounts do not alter historical records.
 
 ---
 
-## 2. Data Model & SQLite Migrations
+## 2. Data Model & Database Migrations
 
 SQLite operates with `PRAGMA foreign_keys = ON` and `PRAGMA busy_timeout = 15000`. The schema is managed through versioned migrations in [`app/core/migrations.py`](../app/core/migrations.py).
+
+For a **fresh** remote PostgreSQL database, set `DATABASE_URL`; [`app/core/postgres_migrations.py`](../app/core/postgres_migrations.py) creates the equivalent current schema. The PostgreSQL path is intended for the free trial and does not import an existing SQLite database automatically. New PDF and image originals are stored in `finance_sources` and `content_sources` alongside their parent records. Existing disk files remain readable through a fallback path.
 
 ### Entity Relationship Diagram
 
@@ -118,6 +120,7 @@ SQLite operates with `PRAGMA foreign_keys = ON` and `PRAGMA busy_timeout = 15000
 5. **Migration 5 (Project Ownership):** Added `created_by` to `projects` and backfilled owners based on earliest recorded draft creator or default admin.
 6. **Migration 6 (Attribution Snapshots):** Added `creator_name`, `creator_email`, `actor_name`, `actor_email` to `finance_records` and `content_records`, backfilling existing records.
 7. **Migration 7 (EUR Allowance):** Kept the configured EUR daily allowance and removed older currency-specific daily allowance settings. Historical confirmed claims are unchanged.
+8. **Migration 8 (Original Documents):** Added database tables for newly uploaded finance and content originals. Older files in `uploads/` remain readable.
 
 ---
 
@@ -131,7 +134,7 @@ SQLite operates with `PRAGMA foreign_keys = ON` and `PRAGMA busy_timeout = 15000
 - **Authorization Boundaries:**
   - Members can view only their assigned projects and their own current records.
   - Members can see their own finance history; organization-wide finance history, admin settings, user management, and duplicate overrides require `role == 'admin'`.
-  - Finance originals are stored as files at `database_path.parent / uploads / finance-<id>`, outside SQLite. The database stores the filename, MIME type, hash, extracted details, and confirmed calculation. The `/source/finance/{id}` route checks the session and record ownership before serving the file: members can open their own originals and admins can open all. The file remains on the server after the user's device is disconnected. The uploader or an admin can delete an unconfirmed draft and its upload; confirmed claims cannot be deleted through that control.
+  - New finance and content originals are stored as database bytes with their parent record. The `/source/finance/{id}` route checks the session and record ownership before serving the file: members can open their own originals and admins can open all. An old `uploads/finance-<id>` file remains available as a fallback. The uploader or an admin can delete an unconfirmed draft and its upload; confirmed claims cannot be deleted through that control.
 - **HTTP Security Headers:**
   - `X-Content-Type-Options: nosniff`
   - `X-Frame-Options: DENY`
@@ -190,7 +193,7 @@ Located in [`app/finance/duplicates.py`](../app/finance/duplicates.py):
        return "".join(ch for ch in unicodedata.normalize("NFKC", str(value or "")).casefold() if ch.isalnum())
    ```
    If both normalized fields match a confirmed record, it is flagged as a duplicate.
-3. **Transaction Serialization:** During claim confirmation, `db.execute("BEGIN IMMEDIATE")` locks the database for writing, preventing two concurrent requests from confirming duplicate claims simultaneously.
+3. **Transaction Serialization:** During claim confirmation, `db.execute("BEGIN IMMEDIATE")` takes a SQLite write lock or is translated to a PostgreSQL finance-table lock, preventing two concurrent requests from confirming duplicate claims simultaneously.
 4. **Admin Override:** If a duplicate is detected, only an admin can confirm it by providing an explicit `duplicate_override_reason` (minimum 5 characters). Non-admins cannot bypass this check.
 
 ---

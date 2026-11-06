@@ -39,6 +39,7 @@ def test_invoice_pdf_can_be_reviewed_confirmed_and_exported(monkeypatch, tmp_pat
                              files={"file": ("invoice.pdf", b"%PDF-1.4\nexample", "application/pdf")},
                              follow_redirects=False)
         assert upload.status_code == 303
+        assert client.get("/source/finance/1").content == b"%PDF-1.4\nexample"
         review = client.get(upload.headers["location"])
         assert 'value="invoice" selected' in review.text
         assert 'value="INV-42"' in review.text
@@ -67,6 +68,7 @@ def test_invoice_pdf_can_be_reviewed_confirmed_and_exported(monkeypatch, tmp_pat
     with database(cfg.database_path) as db:
         row = db.execute("SELECT details_json, calculation_json FROM finance_records WHERE id=1").fetchone()
         details, calculation = json.loads(row["details_json"]), json.loads(row["calculation_json"])
+        assert db.execute("SELECT data FROM finance_sources WHERE record_id=1").fetchone()[0] == b"%PDF-1.4\nexample"
     assert details["invoice_number"] == "INV-42" and details["invoice_date"] == "2026-11-01"
     assert calculation["daily_allowance"] == "0.00" and calculation["total_eur"] == "125.00"
     assert sent[0][0] == "Finance" and sent[0][1][20:22] == ["INV-42", "2026-11-01"]
