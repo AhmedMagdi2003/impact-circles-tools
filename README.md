@@ -62,7 +62,7 @@ scripts/
   memory_probe.py        # Local memory usage probe
   google_apps_script/    # Local webhook source; public copy is in the Admin Guide
 tests/                   # Automated pytest suites and Apps Script simulation harness
-Dockerfile               # Container using official uv binary; accepts host PORT or 8000
+Dockerfile               # Container using official uv binary; listens on port 8000
 render.yaml              # Render web service blueprint declaration
 compose.yaml             # Docker Compose configuration with Caddy reverse proxy
 pyproject.toml           # Project dependencies, build system, and pytest configuration
