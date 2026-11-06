@@ -18,4 +18,4 @@ COPY app ./app
 COPY scripts ./scripts
 USER appuser
 EXPOSE 8000
-CMD ["uvicorn", "app.web:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1", "--limit-concurrency", "2", "--no-access-log"]
+CMD ["sh", "-c", "exec uvicorn app.web:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1 --limit-concurrency 2 --no-access-log"]

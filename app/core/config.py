@@ -25,7 +25,7 @@ class Config:
 
 
 def load_config() -> Config:
-    # A local .env is useful for development. Render and VPS deployments set these
+    # A local .env is useful for development. Cloud and VPS deployments set these
     # values in the host's secret manager instead.
     env_file = Path(__file__).resolve().parents[2] / ".env"
     if env_file.exists():

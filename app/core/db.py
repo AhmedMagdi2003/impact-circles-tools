@@ -1,4 +1,4 @@
-"""SQLite locally, or PostgreSQL for a diskless Render trial."""
+"""SQLite locally, or PostgreSQL for a diskless hosted trial."""
 
 import os
 import sqlite3

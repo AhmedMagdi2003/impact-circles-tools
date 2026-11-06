@@ -5,7 +5,7 @@ One small, unified web application for financial document workflows and project-
 - **Finance:** upload document → enter your personal details and check extracted document details → confirm claim. Possible duplicates are flagged and sent to an admin for review.
 - **Content:** choose your assigned project, add a brief or source file → review and edit three tailored drafts (LinkedIn, newsletter, website) → approve. An admin can optionally forward approved drafts to a publishing webhook.
 
-Admins see shared history, review suspected duplicates, and assign project owners. Members see their own claim history, daily allowance rates and usage, and assigned projects. A travel day already paid on a member's confirmed claim does not earn a second daily allowance on another booking. Records are stored in SQLite for local or disk-backed hosting, or PostgreSQL when `DATABASE_URL` is set for the Render Free trial. Confirmed finance claims and approved content drafts are exported to Google Sheets through an Apps Script webhook, including snapshot attribution of who created and who confirmed/approved each record.
+Admins see shared history, review suspected duplicates, and assign project owners. Members see their own claim history, daily allowance rates and usage, and assigned projects. A travel day already paid on a member's confirmed claim does not earn a second daily allowance on another booking. Records are stored in SQLite for local or disk-backed hosting, or PostgreSQL when `DATABASE_URL` is set for a diskless hosted trial. Confirmed finance claims and approved content drafts are exported to Google Sheets through an Apps Script webhook, including snapshot attribution of who created and who confirmed/approved each record.
 
 The AI model only reads documents and drafts text; it never performs financial calculations. PDFs and images are sent directly as raw bytes to the selected multimodal model (Gemini, OpenAI, or Anthropic); there is no heavy local OCR or PDF rendering engine. Newly uploaded originals are stored with their records in the selected database. Older local installations can still read originals retained in their `uploads/` folder. A member can open their own uploaded original from the claim review page, and an admin can open any claim's original. Other members cannot open it through the app. Access to the separate Google Sheet depends on Google Drive sharing settings.
 
@@ -22,7 +22,7 @@ The AI model only reads documents and drafts text; it never performs financial c
 - **[Admin Guide](docs/ADMIN_GUIDE.md):** Users, settings, duplicate review, Sheets connection, and backups.
 - **[Smart Claims Calculation](docs/SMART_CLAIMS_CALCULATION.md):** Exact allowance and currency rules, examples, and code locations.
 - **[Build Locally from Scratch](docs/LOCAL_SETUP_FROM_SCRATCH.md):** New Windows device setup, first admin, and database migrations.
-- **[Why Paid Hosting Is Needed](docs/PAID_HOSTING.md):** Public browser link, persistent storage, costs, and future project hosting.
+- **[Free Trial and Paid Hosting](docs/PAID_HOSTING.md):** Railway trial setup, public browser link, persistent storage, costs, and future project hosting.
 
 The sixth published guide is the **[Architecture and Technical Reference](docs/TECHNICAL.md)** for maintainers.
 
@@ -62,7 +62,7 @@ scripts/
   memory_probe.py        # Local memory usage probe
   google_apps_script/    # Local webhook source; public copy is in the Admin Guide
 tests/                   # Automated pytest suites and Apps Script simulation harness
-Dockerfile               # Multi-stage container using official uv binary
+Dockerfile               # Container using official uv binary; accepts host PORT or 8000
 render.yaml              # Render web service blueprint declaration
 compose.yaml             # Docker Compose configuration with Caddy reverse proxy
 pyproject.toml           # Project dependencies, build system, and pytest configuration

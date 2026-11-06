@@ -1,4 +1,4 @@
-"""Fresh PostgreSQL schema for a diskless Render Free web trial.
+"""Fresh PostgreSQL schema for a diskless hosted web trial.
 
 The regular SQLite migrations remain the local and paid-disk path. PostgreSQL
 stores both records and original uploads so web instance restarts lose no data.

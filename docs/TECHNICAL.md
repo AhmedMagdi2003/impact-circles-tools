@@ -44,7 +44,7 @@ The application is implemented as a single, unified FastAPI service (`app.web:ap
 ```
 
 ### Key Architectural Invariants
-- **Single Process & Single Worker (`--workers 1`):** The Docker service uses one worker. Local and paid-disk installs use SQLite; setting `DATABASE_URL` selects PostgreSQL for a diskless trial. The final duplicate check locks finance records before confirming a claim.
+- **Single Process & Single Worker (`--workers 1`):** The Docker service uses one worker. Local and paid-disk installs use SQLite; setting `DATABASE_URL` selects PostgreSQL for a diskless trial. The container listens on the host's `PORT` variable or 8000. The final duplicate check locks finance records before confirming a claim.
 - **Multimodal AI as Feature Extractor Only:** Models extract candidate facts only; they never compute monetary amounts, exchange rates, or per diem days. All calculations are executed server-side using `decimal.Decimal`.
 - **Zero Local OCR Overhead:** The application transmits original PDF or image binary bytes directly to the external multimodal model (base64). No local OCR engines (Tesseract) or PDF renderers (Poppler, pdf2image) are installed.
 - **Permanent Ledger Attribution:** When a record is created and subsequently confirmed or approved, the user's `display_name` and `email` are permanently snapshotted into `creator_name`, `creator_email`, `actor_name`, and `actor_email`. Subsequent edits to user accounts do not alter historical records.
